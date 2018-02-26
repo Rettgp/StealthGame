@@ -22,6 +22,7 @@ void AFPSGameMode::CompleteMission(APawn* instigator_pawn)
 	{
 		instigator_pawn->DisableInput(nullptr);
 		
+		// Change view targets if any valid actor found (I DONT LIKE IT USE EVENT GRAPH INSTEAD)
 		if (!SpectatingViewpointClass)
 		{
 			UE_LOG(LogTemp, Log, TEXT("SpectatingViewpointClass not found! Update GameMode with valid SpectatingViewpointClass."));
@@ -31,7 +32,6 @@ void AFPSGameMode::CompleteMission(APawn* instigator_pawn)
 		TArray<AActor*> all_actors;
 		UGameplayStatics::GetAllActorsOfClass(this, SpectatingViewpointClass, all_actors);
 
-		// Change view targets if any valid actor found (I DONT LIKE IT USE EVENT GRAPH INSTEAD)
 		AActor* new_view_target;
 		if (all_actors.Num() > 0)
 		{
