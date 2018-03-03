@@ -7,6 +7,7 @@
 #include "FPSAIGuard.generated.h"
 	
 class UPawnSensingComponent;
+class ATargetPoint;
 
 UENUM(BlueprintType)
 enum class EAIState : uint8
@@ -32,10 +33,17 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 	void SetGuardState(EAIState new_state);
+	ATargetPoint* GetNextNavPoint();
 
 	UPROPERTY(VisibleAnywhere, Category = "Components")
 	UPawnSensingComponent* PawnSensingComp;
+	UPROPERTY(EditInstanceOnly, Category = "Paths")
+	TArray<ATargetPoint*> PathPoints;
+	UPROPERTY(ReplicatedUsing=OnRep_GuardState)
+	EAIState GuardState;
 
+	UFUNCTION()
+	void OnRep_GuardState();
 	UFUNCTION()
 	void OnPawnSeen(APawn* SeenPawn);
 	UFUNCTION()
@@ -50,7 +58,7 @@ protected:
 	FRotator OriginalRotation;
 	FTimerHandle ResetRotationTimer;
 	FTimerHandle AlertTimer;
-	EAIState GuardState;
 	TArray<APawn*> SeenPawns;
-
+	int CurrentNavIndex = 0;
+	int LastNavIndex = 0;
 };

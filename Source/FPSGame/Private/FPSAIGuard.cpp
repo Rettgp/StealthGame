@@ -2,9 +2,14 @@
 
 #include "FPSAIGuard.h"
 
+#include "AIController.h"
+#include "Algo/Reverse.h"
 #include "DrawDebugHelpers.h"
+#include "Engine/TargetPoint.h"
 #include "FPSGameMode.h"
 #include "Perception/PawnSensingComponent.h"
+#include "AI/Navigation/NavigationSystem.h"
+#include "Net/UnrealNetwork.h"
 
 
 // Sets default values
@@ -25,6 +30,12 @@ void AFPSAIGuard::BeginPlay()
 	
 	PawnSensingComp->OnSeePawn.AddDynamic(this, &AFPSAIGuard::OnPawnSeen);
 	PawnSensingComp->OnHearNoise.AddDynamic(this, &AFPSAIGuard::OnNoiseHeard);
+
+	auto ai_controller = Cast<AAIController>(GetController());
+	if (ai_controller && PathPoints.Num() > 0)
+	{
+		UNavigationSystem::SimpleMoveToActor(ai_controller, GetNextNavPoint());
+	}
 }
 
 void AFPSAIGuard::SetGuardState(EAIState new_state)
@@ -36,12 +47,31 @@ void AFPSAIGuard::SetGuardState(EAIState new_state)
 
 	GuardState = new_state;
 
-	OnStateChanged(GuardState);
+	OnRep_GuardState();
+}
+
+ATargetPoint* AFPSAIGuard::GetNextNavPoint()
+{
+	if (CurrentNavIndex >= PathPoints.Num())
+	{
+		Algo::Reverse(PathPoints);
+		
+		CurrentNavIndex = 0;
+	}
+	LastNavIndex = CurrentNavIndex;
+
+	return PathPoints[CurrentNavIndex++];
 }
 
 void AFPSAIGuard::ResetRotation()
 {
 	SetActorRotation(OriginalRotation);
+
+	auto ai_controller = Cast<AAIController>(GetController());
+	if (ai_controller && PathPoints.Num() > 0)
+	{
+		UNavigationSystem::SimpleMoveToActor(ai_controller, PathPoints[LastNavIndex]);
+	}
 
 	SetGuardState(EAIState::IDLE);
 }
@@ -68,6 +98,11 @@ void AFPSAIGuard::AlertGuard()
 	}
 }
 
+void AFPSAIGuard::OnRep_GuardState()
+{
+	OnStateChanged(GuardState);
+}
+
 void AFPSAIGuard::OnPawnSeen(APawn* seen_pawn)
 {
 	if (!seen_pawn)
@@ -75,6 +110,12 @@ void AFPSAIGuard::OnPawnSeen(APawn* seen_pawn)
 		return;
 	}
 	//DrawDebugSphere(GetWorld(), seen_pawn->GetActorLocation(), 32.0, 12, FColor::Red, false, 10.0f);
+
+	auto ai_controller = Cast<AAIController>(GetController());
+	if (ai_controller)
+	{
+		ai_controller->StopMovement();
+	}
 
 	FVector direction = seen_pawn->GetActorLocation() - GetActorLocation();
 	direction.Normalize();
@@ -105,6 +146,12 @@ void AFPSAIGuard::OnNoiseHeard(APawn* pawn_instigator, const FVector& location, 
 {
 	//DrawDebugSphere(GetWorld(), location, 32.0, 12, FColor::Blue, false, 10.0f);
 
+	auto ai_controller = Cast<AAIController>(GetController());
+	if (ai_controller)
+	{
+		ai_controller->StopMovement();
+	}
+
 	FVector direction = location - GetActorLocation();
 	direction.Normalize();
 
@@ -127,4 +174,25 @@ void AFPSAIGuard::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (PathPoints.Num() <= 0)
+	{
+		return;
+	}
+	auto current_goal = PathPoints[LastNavIndex];
+	auto goal_delta = GetActorLocation() - current_goal->GetActorLocation();
+	if (goal_delta.Size() < 75)
+	{
+		auto ai_controller = Cast<AAIController>(GetController());
+		if (ai_controller && PathPoints.Num() > 0)
+		{
+			UNavigationSystem::SimpleMoveToActor(ai_controller, GetNextNavPoint());
+		}
+	}
+}
+
+void AFPSAIGuard::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AFPSAIGuard, GuardState);
 }
